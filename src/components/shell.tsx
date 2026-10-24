@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- brand logo served by panzutti.com */
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -102,7 +101,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {/* desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen flex-col bg-brand-green-dark p-4 lg:flex">
         <Link href="/" className="mb-6 flex items-center gap-2 px-2 pt-2">
-          <img src="https://panzutti.com/brand/logo-cream.png" alt="Panzutti" className="h-9 w-auto" />
+          <span aria-label="Panzutti" className="font-display text-2xl font-extrabold italic leading-none text-brand-cream">Panzutti</span>
           <span className="rounded-full bg-brand-yellow px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-foreground">Admin</span>
         </Link>
         {nav}
@@ -112,7 +111,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       {/* mobile top bar */}
       <header className="sticky top-0 z-30 flex items-center justify-between bg-brand-green-dark px-4 py-3 lg:hidden">
         <Link href="/" className="flex items-center gap-2">
-          <img src="https://panzutti.com/brand/logo-cream.png" alt="Panzutti" className="h-8 w-auto" />
+          <span aria-label="Panzutti" className="font-display text-xl font-extrabold italic leading-none text-brand-cream">Panzutti</span>
           <span className="rounded-full bg-brand-yellow px-2 py-0.5 text-[10px] font-extrabold uppercase text-foreground">Admin</span>
         </Link>
         <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-label="Menu" className="rounded-lg p-2 text-brand-cream">

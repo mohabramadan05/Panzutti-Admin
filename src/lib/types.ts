@@ -22,6 +22,14 @@ export type Order = {
   subtotal: number;
   discount_total: number;
   delivery_fee: number;
+  /** v4 (panzutti_supabase_v4.sql): 14% VAT on every order, 12% service on reservations. Absent before v4 runs. */
+  tax_total?: number;
+  service_total?: number;
+  tax_rate?: number;
+  service_rate?: number;
+  /** v4: a table booking — stored as type "pickup" with scheduled_for = table time. */
+  is_reservation?: boolean;
+  party_size?: number | null;
   total: number;
   note: string | null;
   cancel_reason: string | null;
@@ -77,6 +85,9 @@ export function nextStatus(o: Pick<Order, "status" | "type">): OrderStatus | nul
       return null;
   }
 }
+
+/** "reservation" for table bookings, otherwise the order type. */
+export const kindOf = (o: Pick<Order, "type" | "is_reservation">) => (o.is_reservation ? "reservation" : o.type);
 
 export const NEXT_LABEL: Partial<Record<OrderStatus, string>> = {
   confirmed: "Confirm order",

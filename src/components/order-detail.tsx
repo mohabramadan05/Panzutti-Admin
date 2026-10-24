@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Ban, Bike, CalendarClock, CheckCircle2, MapPin, MessageSquare, Phone, ShoppingBag, Wallet, X } from "lucide-react";
+import { Ban, Bike, CalendarClock, CalendarDays, CheckCircle2, MapPin, MessageSquare, Phone, ShoppingBag, Users, Wallet, X } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { NEXT_LABEL, STATUS_LABEL, nextStatus, type Order, type OrderItem, type PaymentProof } from "@/lib/types";
+import { NEXT_LABEL, STATUS_LABEL, kindOf, nextStatus, type Order, type OrderItem, type PaymentProof } from "@/lib/types";
 import { dateTime, egp, localPhone, time } from "@/lib/utils";
 import { ProofReview } from "./proof-review";
 import { Badge, Button, ErrorNote, Input, Spinner, StatusBadge } from "./ui";
@@ -59,7 +59,9 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
   const next = nextStatus(order);
   const done = order.status === "completed" || order.status === "cancelled";
   const unpaidInstapay = order.payment_method === "instapay" && order.payment_status !== "paid";
-  const TypeIcon = order.type === "delivery" ? Bike : ShoppingBag;
+  const kind = kindOf(order);
+  const TypeIcon = kind === "delivery" ? Bike : kind === "reservation" ? CalendarDays : ShoppingBag;
+  const pct = (r: number | undefined) => `${Math.round(Number(r ?? 0) * 100)}%`;
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-foreground/40" onClick={onClose}>
@@ -74,8 +76,8 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-2xl text-primary">#{order.order_number}</h2>
               <StatusBadge status={order.status} />
-              <Badge tone="muted">
-                <TypeIcon className="h-3.5 w-3.5" aria-hidden /> {order.type}
+              <Badge tone={kind === "reservation" ? "dark" : "muted"}>
+                <TypeIcon className="h-3.5 w-3.5" aria-hidden /> {kind === "reservation" ? "table reservation" : order.type}
               </Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">Placed {dateTime(order.created_at)}</p>
@@ -152,10 +154,22 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
                 </span>
               </p>
             )}
-            {order.scheduled_for && (
-              <p className="flex items-center gap-2 text-sm font-bold text-brand-red">
-                <CalendarClock className="h-4 w-4" aria-hidden /> Scheduled for {dateTime(order.scheduled_for)}
+            {kind === "reservation" ? (
+              <p className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-brand-yellow/50 px-3 py-2 text-sm font-extrabold">
+                <span className="flex items-center gap-2">
+                  <CalendarClock className="h-4 w-4" aria-hidden /> Table at {order.scheduled_for ? dateTime(order.scheduled_for) : "—"}
+                </span>
+                <span className="flex items-center gap-2">
+                  <Users className="h-4 w-4" aria-hidden /> {order.party_size ?? "?"} guests
+                </span>
+                <span className="w-full text-xs font-bold text-muted-foreground">Have the food ready for this time.</span>
               </p>
+            ) : (
+              order.scheduled_for && (
+                <p className="flex items-center gap-2 text-sm font-bold text-brand-red">
+                  <CalendarClock className="h-4 w-4" aria-hidden /> Scheduled for {dateTime(order.scheduled_for)}
+                </p>
+              )
             )}
             {order.note && (
               <p className="flex gap-2 rounded-xl bg-brand-yellow/40 p-3 text-sm">
@@ -195,6 +209,12 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
                 <div className="flex justify-between text-primary"><dt>Discount {order.promo_code && `(${order.promo_code})`}</dt><dd>−{egp(order.discount_total)}</dd></div>
               )}
               {order.delivery_fee > 0 && <div className="flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd>{egp(order.delivery_fee)}</dd></div>}
+              {(order.service_total ?? 0) > 0 && (
+                <div className="flex justify-between"><dt className="text-muted-foreground">Service ({pct(order.service_rate)})</dt><dd>{egp(order.service_total)}</dd></div>
+              )}
+              {(order.tax_total ?? 0) > 0 && (
+                <div className="flex justify-between"><dt className="text-muted-foreground">VAT ({pct(order.tax_rate)})</dt><dd>{egp(order.tax_total)}</dd></div>
+              )}
               <div className="flex justify-between text-lg font-extrabold text-primary"><dt>Total</dt><dd>{egp(order.total)}</dd></div>
               <div className="flex justify-between pt-1">
                 <dt className="text-muted-foreground">Payment</dt>

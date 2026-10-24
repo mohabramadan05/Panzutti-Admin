@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, BellOff, Bike, CalendarClock, ClipboardList, ShoppingBag } from "lucide-react";
+import { Bell, BellOff, Bike, CalendarClock, CalendarDays, ClipboardList, ShoppingBag, Users } from "lucide-react";
 import { OrderDetail } from "@/components/order-detail";
 import { Badge, Button, Empty, ErrorNote, PageHeader, Spinner, StatusBadge } from "@/components/ui";
 import { useOrders } from "@/lib/use-orders";
-import { STATUS_LABEL, type Order, type OrderStatus } from "@/lib/types";
-import { ago, cn, egp, time } from "@/lib/utils";
+import { STATUS_LABEL, kindOf, type Order, type OrderStatus } from "@/lib/types";
+import { ago, cairoDate, cn, dateTime, egp, time } from "@/lib/utils";
 
 const COLUMNS: OrderStatus[] = ["pending", "confirmed", "preparing", "ready", "out_for_delivery"];
 
@@ -28,7 +28,10 @@ function chime(ctx: AudioContext) {
 
 function OrderCard({ o, flash, onOpen, now }: { o: Order; flash: boolean; onOpen: () => void; now: number }) {
   const waitingPayment = o.payment_method === "instapay" && o.payment_status !== "paid";
-  const TypeIcon = o.type === "delivery" ? Bike : ShoppingBag;
+  const kind = kindOf(o);
+  const TypeIcon = kind === "delivery" ? Bike : kind === "reservation" ? CalendarDays : ShoppingBag;
+  // Reservations can be days ahead: show the date unless it's today
+  const when = o.scheduled_for && (cairoDate(new Date(o.scheduled_for)) === cairoDate() ? time(o.scheduled_for) : dateTime(o.scheduled_for));
   return (
     <button
       type="button"
@@ -44,14 +47,19 @@ function OrderCard({ o, flash, onOpen, now }: { o: Order; flash: boolean; onOpen
       </div>
       <p className="mt-1 truncate font-bold">{o.customer_name}</p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <Badge tone="muted">
-          <TypeIcon className="h-3 w-3" aria-hidden /> {o.type}
+        <Badge tone={kind === "reservation" ? "dark" : "muted"}>
+          <TypeIcon className="h-3 w-3" aria-hidden /> {kind === "reservation" ? "table" : o.type}
         </Badge>
+        {kind === "reservation" && o.party_size != null && (
+          <Badge tone="muted">
+            <Users className="h-3 w-3" aria-hidden /> {o.party_size}
+          </Badge>
+        )}
         {waitingPayment && <Badge tone="red">InstaPay unpaid</Badge>}
         {o.payment_method === "instapay" && !waitingPayment && <Badge tone="green">InstaPay paid</Badge>}
-        {o.scheduled_for && (
+        {when && (
           <Badge tone="yellow">
-            <CalendarClock className="h-3 w-3" aria-hidden /> {time(o.scheduled_for)}
+            <CalendarClock className="h-3 w-3" aria-hidden /> {when}
           </Badge>
         )}
         <span className="ms-auto text-sm font-extrabold tabular-nums">{egp(o.total)}</span>
@@ -67,7 +75,7 @@ export default function OrdersPage() {
     if (sound && audio.current) chime(audio.current);
   });
   const [openId, setOpenId] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<"all" | "delivery" | "pickup">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "delivery" | "pickup" | "reservation">("all");
   const [now, setNow] = useState(() => Date.now());
 
   // keep "x min ago" fresh
@@ -76,7 +84,7 @@ export default function OrdersPage() {
     return () => window.clearInterval(id);
   }, []);
 
-  const shown = useMemo(() => (orders ?? []).filter((o) => typeFilter === "all" || o.type === typeFilter), [orders, typeFilter]);
+  const shown = useMemo(() => (orders ?? []).filter((o) => typeFilter === "all" || kindOf(o) === typeFilter), [orders, typeFilter]);
   const pendingCount = shown.filter((o) => o.status === "pending").length;
 
   // New orders in the browser tab title, so a background tab still shows them
@@ -103,7 +111,7 @@ export default function OrdersPage() {
         actions={
           <>
             <div role="radiogroup" className="flex rounded-full bg-muted p-1 text-sm font-bold">
-              {(["all", "delivery", "pickup"] as const).map((v) => (
+              {(["all", "delivery", "pickup", "reservation"] as const).map((v) => (
                 <button
                   key={v}
                   type="button"
@@ -112,7 +120,7 @@ export default function OrdersPage() {
                   onClick={() => setTypeFilter(v)}
                   className={cn("rounded-full px-3 py-1.5 capitalize", typeFilter === v ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
                 >
-                  {v}
+                  {v === "reservation" ? "tables" : v}
                 </button>
               ))}
             </div>
@@ -133,7 +141,7 @@ export default function OrdersPage() {
       ) : (
         <>
           <div className="grid gap-4 overflow-x-auto pb-2 md:grid-cols-3 xl:grid-cols-5">
-            {COLUMNS.filter((c) => c !== "out_for_delivery" || typeFilter !== "pickup").map((col) => {
+            {COLUMNS.filter((c) => c !== "out_for_delivery" || (typeFilter !== "pickup" && typeFilter !== "reservation")).map((col) => {
               const list = shown.filter((o) => o.status === col);
               return (
                 <section key={col} className="min-w-0 rounded-2xl bg-muted/60 p-3">
@@ -173,7 +181,7 @@ export default function OrdersPage() {
                       <tr key={o.id} onClick={() => setOpenId(o.id)} className="cursor-pointer border-t border-border hover:bg-muted/50">
                         <td className="p-3 font-bold text-primary">#{o.order_number} <span className="font-normal text-muted-foreground">{time(o.created_at)}</span></td>
                         <td className="p-3">{o.customer_name}</td>
-                        <td className="p-3 capitalize">{o.type}</td>
+                        <td className="p-3 capitalize">{kindOf(o) === "reservation" ? `table · ${o.party_size ?? "?"}` : o.type}</td>
                         <td className="p-3"><StatusBadge status={o.status} /></td>
                         <td className="p-3 text-right font-bold tabular-nums">{egp(o.total)}</td>
                       </tr>

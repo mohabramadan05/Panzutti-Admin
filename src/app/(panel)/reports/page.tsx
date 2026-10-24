@@ -13,7 +13,10 @@ type Pay = { payment_method: string; orders_completed: number; net_revenue: numb
 type Cat = { category_name: string; quantity_sold: number; revenue: number; share_pct: number };
 type Hour = { hour_of_day: number; orders_completed: number; net_revenue: number };
 
-type Data = { summary: Summary; daily: Daily[]; top: TopItem[]; pay: Pay[]; cats: Cat[]; hours: Hour[] };
+/** report_tax_summary (v4). null until the v4 SQL has been run. */
+type Tax = { vat_total: number; service_total: number; net_before_tax: number; reservations_placed: number; reservations_completed: number; reservation_guests: number };
+
+type Data = { summary: Summary; daily: Daily[]; top: TopItem[]; pay: Pay[]; cats: Cat[]; hours: Hour[]; tax: Tax | null };
 
 const daysAgo = (n: number) => cairoDate(new Date(Date.now() - n * 86400000));
 const PRESETS = [
@@ -63,13 +66,14 @@ export default function ReportsPage() {
     setLoading(true);
     setError("");
     const args = { p_from: from, p_to: to, p_branch_id: null };
-    const [summary, daily, top, pay, cats, hours] = await Promise.all([
+    const [summary, daily, top, pay, cats, hours, tax] = await Promise.all([
       supabase.rpc("report_branch_summary", args),
       supabase.rpc("report_daily_sales", args),
       supabase.rpc("report_top_items", { ...args, p_limit: 10 }),
       supabase.rpc("report_payment_methods", args),
       supabase.rpc("report_category_sales", args),
       supabase.rpc("report_hourly_sales", args),
+      supabase.rpc("report_tax_summary", args), // may not exist yet: errors are ignored below
     ]);
     setLoading(false);
     const err = [summary, daily, top, pay, cats, hours].find((r) => r.error)?.error;
@@ -81,6 +85,7 @@ export default function ReportsPage() {
       pay: (pay.data ?? []) as Pay[],
       cats: (cats.data ?? []) as Cat[],
       hours: (hours.data ?? []) as Hour[],
+      tax: tax.error ? null : (((tax.data ?? []) as Tax[])[0] ?? null),
     });
   }, [from, to]);
 
@@ -151,7 +156,7 @@ export default function ReportsPage() {
         <div className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {[
-              ["Net revenue", egp(s!.net_revenue)],
+              ["Net revenue (incl. VAT)", egp(s!.net_revenue)],
               ["Completed orders", s!.orders_completed],
               ["Average order", egp(s!.avg_order_value)],
               ["Cancelled", `${s!.orders_cancelled} (${s!.cancel_rate_pct}%)`],
@@ -163,6 +168,27 @@ export default function ReportsPage() {
               </Card>
             ))}
           </div>
+
+          {data.tax ? (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                ["Revenue before VAT", egp(Number(data.tax.net_before_tax)), "Net revenue minus VAT"],
+                ["VAT collected (14%)", egp(Number(data.tax.vat_total)), "Owed to the tax authority"],
+                ["Service charge (12%)", egp(Number(data.tax.service_total)), "Reservations only"],
+                ["Table reservations", `${data.tax.reservations_completed} / ${data.tax.reservations_placed}`, `completed / booked · ${data.tax.reservation_guests} guests`],
+              ].map(([label, value, hint]) => (
+                <Card key={label}>
+                  <p className="text-sm font-bold text-muted-foreground">{label}</p>
+                  <p className="mt-1 font-display text-2xl text-primary">{value}</p>
+                  <p className="text-xs text-muted-foreground">{hint}</p>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl bg-brand-yellow/40 px-4 py-3 text-sm font-bold">
+              VAT, service and reservation figures appear here once database/panzutti_supabase_v4.sql has been run.
+            </p>
+          )}
 
           <div className="grid gap-6 xl:grid-cols-2">
             <Card>

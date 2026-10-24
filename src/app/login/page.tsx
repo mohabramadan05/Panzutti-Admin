@@ -1,5 +1,4 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- brand logo served by panzutti.com */
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -32,7 +31,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-brand-green-dark p-4">
       <form onSubmit={submit} className="w-full max-w-sm rounded-3xl bg-card p-8 shadow-2xl">
         <div className="mb-6 flex items-center justify-center rounded-2xl bg-brand-red py-5">
-          <img src="https://panzutti.com/brand/logo-cream.png" alt="Panzutti" className="h-12 w-auto" />
+          <span aria-label="Panzutti" className="font-display text-4xl font-extrabold italic leading-none text-brand-cream">Panzutti</span>
         </div>
         <h1 className="text-center text-2xl text-primary">Staff sign in</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">Orders, payments, menu and reports.</p>

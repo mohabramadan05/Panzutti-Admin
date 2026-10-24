@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ArrowRight, Camera, ClipboardList, CreditCard, Users } from "lucide-react";
+import { ArrowRight, CalendarDays, Camera, ClipboardList, CreditCard, Users } from "lucide-react";
 import { Card, PageHeader, Spinner } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
-import { STATUS_LABEL, type OrderStatus } from "@/lib/types";
-import { cairoDate, cn, egp } from "@/lib/utils";
+import { STATUS_LABEL, type Order, type OrderStatus } from "@/lib/types";
+import { cairoDate, cn, dateTime, egp } from "@/lib/utils";
 
 type Today = { orders_placed: number; orders_completed: number; orders_cancelled: number; net_revenue: number; avg_order_value: number } | null;
 
@@ -18,6 +18,7 @@ export default function DashboardPage() {
   const [today, setToday] = useState<Today | undefined>(undefined);
   const [live, setLive] = useState<Record<string, number>>({});
   const [waiting, setWaiting] = useState({ proofs: 0, photos: 0, applications: 0 });
+  const [tables, setTables] = useState<Order[] | null>(null);
 
   useEffect(() => {
     document.title = "Dashboard · Panzutti Admin";
@@ -34,6 +35,16 @@ export default function DashboardPage() {
         (data ?? []).forEach((o: { status: string }) => (c[o.status] = (c[o.status] ?? 0) + 1));
         setLive(c);
       });
+    // Next table reservations (v4). Before the v4 SQL runs the column doesn't exist: show none.
+    supabase
+      .from("orders")
+      .select("*")
+      .eq("is_reservation", true)
+      .not("status", "in", "(cancelled,completed)")
+      .gte("scheduled_for", new Date(Date.now() - 2 * 3600 * 1000).toISOString())
+      .order("scheduled_for")
+      .limit(6)
+      .then(({ data }) => setTables((data ?? []) as Order[]));
     Promise.all([
       count(supabase.from("payment_proofs").select("id", { count: "exact", head: true }).eq("status", "pending")),
       isAdmin ? count(supabase.from("family_photos").select("id", { count: "exact", head: true }).eq("status", "pending")) : Promise.resolve(0),
@@ -106,6 +117,37 @@ export default function DashboardPage() {
           </ul>
         </Card>
       </div>
+
+      <Card className="mt-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-xl text-primary">
+            <CalendarDays className="h-5 w-5" aria-hidden /> Upcoming table reservations
+          </h2>
+          <Link href="/orders" className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline">
+            Open board <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        </div>
+        {tables === null ? (
+          <Spinner />
+        ) : tables.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No upcoming reservations.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {tables.map((o) => (
+              <li key={o.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-2.5 text-sm">
+                <span className="w-32 font-extrabold text-brand-red">{o.scheduled_for ? dateTime(o.scheduled_for) : "—"}</span>
+                <span className="font-bold text-primary">#{o.order_number}</span>
+                <span className="min-w-0 flex-1 truncate">{o.customer_name}</span>
+                <span className="inline-flex items-center gap-1 text-muted-foreground">
+                  <Users className="h-4 w-4" aria-hidden /> {o.party_size ?? "?"}
+                </span>
+                <span className="text-xs font-bold uppercase text-muted-foreground">{STATUS_LABEL[o.status]}</span>
+                <span className="w-24 text-right font-bold tabular-nums">{egp(o.total)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </>
   );
 }

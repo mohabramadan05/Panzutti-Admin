@@ -43,13 +43,13 @@ To remove access, run `update profiles set role = 'customer'` or `is_active = fa
 
 | Page | Who | What |
 |---|---|---|
-| `/` Dashboard | staff, admin | Today's sales (`report_daily_sales`), live order counts, things waiting |
-| `/orders` | staff, admin | Live board (Realtime on `orders`), detail panel, next status / cancel with reason / mark paid (`update_order_status`, `mark_order_paid`), sound alert and tab-title count for new orders |
+| `/` Dashboard | staff, admin | Today's sales (`report_daily_sales`), live order counts, things waiting, upcoming table reservations |
+| `/orders` | staff, admin | Live board (Realtime on `orders`), detail panel, next status / cancel with reason / mark paid (`update_order_status`, `mark_order_paid`), sound alert and tab-title count for new orders. Filter **tables** = reservations (date, guests); detail shows Service 12% / VAT 14% lines |
 | `/payments` | staff, admin | InstaPay screenshots: approve or reject with a reason (`review_payment_proof`) |
 | `/menu` | staff, admin | Sold-out switches (`set_menu_item_sold_out`, `set_addon_sold_out`). **Admins:** add / edit / delete categories, items (with photo upload to the public `menu-images` bucket and which add-on groups they offer), add-on groups (min/max choices) and add-ons; hide items |
 | `/family` | admin | Approve, reject or remove Panzutti Family photos (`review_family_photo`), guest uploads included |
 | `/applications` | admin | Job and supplier applications: status, internal note, CV download (signed URL) |
-| `/reports` | staff, admin | `report_branch_summary`, daily sales, top items, payment methods, categories, busy hours, CSV export |
+| `/reports` | staff, admin | `report_branch_summary`, daily sales, top items, payment methods, categories, busy hours, VAT / service / reservations (`report_tax_summary`, needs the website's `database/panzutti_supabase_v4.sql`), CSV export |
 
 ## Code map
 
