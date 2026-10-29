@@ -19,6 +19,20 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
+  const [drivers, setDrivers] = useState<{ id: string; full_name: string }[]>([]);
+
+  // Active drivers of this order's branch (or of every branch), for the driver picker
+  useEffect(() => {
+    if (order.type !== "delivery") return;
+    supabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("role", "driver")
+      .eq("is_active", true)
+      .or(`branch_id.is.null,branch_id.eq.${order.branch_id}`)
+      .order("full_name")
+      .then(({ data }) => setDrivers(data ?? []));
+  }, [order.type, order.branch_id]);
 
   const load = useCallback(async () => {
     const [it, hi, pr] = await Promise.all([
@@ -112,6 +126,20 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
                   </Button>
                 )}
               </div>
+              {order.type === "delivery" && drivers.length > 0 && (
+                <label className="flex flex-wrap items-center gap-2 text-sm font-bold">
+                  <Bike className="h-4 w-4 text-primary" aria-hidden /> Driver
+                  <select
+                    value={order.driver_id ?? ""}
+                    disabled={busy === "driver"}
+                    onChange={(e) => run("driver", () => supabase.rpc("assign_driver", { p_order_id: order.id, p_driver_id: e.target.value || null }))}
+                    className="h-9 rounded-full bg-background px-3 ring-1 ring-border"
+                  >
+                    <option value="">Not assigned (any driver can take it when ready)</option>
+                    {drivers.map((d) => <option key={d.id} value={d.id}>{d.full_name || "Driver"}</option>)}
+                  </select>
+                </label>
+              )}
               {next === "completed" && unpaidInstapay && (
                 <p className="text-sm font-bold text-brand-red">InstaPay isn&apos;t paid yet — approve the screenshot or mark it paid before completing.</p>
               )}

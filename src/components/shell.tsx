@@ -2,35 +2,52 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
-import { BarChart3, Camera, ClipboardList, CreditCard, ExternalLink, LayoutDashboard, LogOut, Menu as MenuIcon, ShieldAlert, Star, Users, UtensilsCrossed, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BarChart3, Bike, Camera, ClipboardList, CreditCard, ExternalLink, LayoutDashboard, LogOut, Menu as MenuIcon, ShieldAlert, Star, UserCog, Users, UtensilsCrossed, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button, Spinner } from "./ui";
 
-const NAV = [
-  { href: "/", label: "Dashboard", Icon: LayoutDashboard, admin: false },
-  { href: "/orders", label: "Orders", Icon: ClipboardList, admin: false },
-  { href: "/payments", label: "InstaPay", Icon: CreditCard, admin: false },
-  { href: "/menu", label: "Menu", Icon: UtensilsCrossed, admin: false },
-  { href: "/loyalty", label: "Loyalty points", Icon: Star, admin: false },
-  { href: "/family", label: "Family photos", Icon: Camera, admin: true },
-  { href: "/applications", label: "Applications", Icon: Users, admin: true },
-  { href: "/reports", label: "Reports", Icon: BarChart3, admin: false },
+type PanelRole = Exclude<Role, "customer">;
+
+/** Who sees which page (the database enforces the same rules, this only hides what they can't use) */
+const NAV: { href: string; label: string; Icon: typeof LayoutDashboard; roles: PanelRole[] }[] = [
+  { href: "/", label: "Dashboard", Icon: LayoutDashboard, roles: ["admin", "staff"] },
+  { href: "/orders", label: "Orders", Icon: ClipboardList, roles: ["admin", "staff", "cashier"] },
+  { href: "/deliveries", label: "Deliveries", Icon: Bike, roles: ["driver"] },
+  { href: "/payments", label: "InstaPay", Icon: CreditCard, roles: ["admin", "staff", "cashier"] },
+  { href: "/menu", label: "Menu", Icon: UtensilsCrossed, roles: ["admin", "staff", "cashier"] },
+  { href: "/loyalty", label: "Loyalty points", Icon: Star, roles: ["admin", "staff", "cashier"] },
+  { href: "/family", label: "Family photos", Icon: Camera, roles: ["admin"] },
+  { href: "/applications", label: "Applications", Icon: Users, roles: ["admin"] },
+  { href: "/reports", label: "Reports", Icon: BarChart3, roles: ["admin", "staff"] },
+  { href: "/users", label: "Users & roles", Icon: UserCog, roles: ["admin"] },
 ];
+
+const isUnder = (pathname: string, href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
 const WEBSITE = process.env.NEXT_PUBLIC_WEBSITE_URL ?? "https://panzutti.com";
 
 /** Signed-in staff/admin only. Everything else gets the login page or a "no access" screen. */
 export function Shell({ children }: { children: React.ReactNode }) {
-  const { session, profile, isStaff, isAdmin, signOut } = useAuth();
+  const { session, profile, isStaff, isDriver, signOut } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const role = (isStaff || isDriver) && profile ? (profile.role as PanelRole) : null;
+  const links = useMemo(() => (role ? NAV.filter((n) => n.roles.includes(role)) : []), [role]);
+  const allowed = links.some((n) => isUnder(pathname, n.href));
+  const home = links[0]?.href;
 
   useEffect(() => {
     if (session === null) router.replace("/login");
   }, [session, router]);
+
+  // A page this role can't use (e.g. a driver opening "/"): go to their first page
+  useEffect(() => {
+    if (!allowed && home) router.replace(home);
+  }, [allowed, home, router]);
 
   useEffect(() => setOpen(false), [pathname]);
 
@@ -41,19 +58,16 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </div>
     );
 
-  if (!isStaff)
+  if (!role)
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
         <div className="max-w-md rounded-2xl bg-card p-8 text-center shadow ring-1 ring-border">
           <ShieldAlert className="mx-auto h-10 w-10 text-brand-red" aria-hidden />
           <h1 className="mt-3 text-2xl text-primary">No access yet</h1>
           <p className="mt-2 text-muted-foreground">
-            You&apos;re signed in as <b>{session.user.email}</b>, but this account isn&apos;t marked as staff or admin.
-            Ask the owner to run:
+            You&apos;re signed in as <b>{session.user.email}</b>, but this account has no staff role yet (or it was switched off).
+            Ask an admin to give you one under <b>Users &amp; roles</b>.
           </p>
-          <code className="mt-3 block rounded-lg bg-muted p-3 text-left text-xs">
-            update profiles set role = &apos;staff&apos; where email = &apos;{session.user.email}&apos;;
-          </code>
           <Button variant="outline" className="mt-5" onClick={signOut}>
             <LogOut className="h-4 w-4" aria-hidden /> Sign out
           </Button>
@@ -61,8 +75,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </div>
     );
 
-  const links = NAV.filter((n) => !n.admin || isAdmin);
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  if (!allowed)
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner />
+      </div>
+    );
+
+  const isActive = (href: string) => isUnder(pathname, href);
 
   const nav = (
     <nav aria-label="Admin" className="flex flex-col gap-1">

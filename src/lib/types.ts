@@ -1,6 +1,9 @@
 /** Row shapes the panel reads. Column names match database/panzutti_supabase*.sql in the website repo. */
 
-export type Role = "customer" | "staff" | "admin";
+export type Role = "customer" | "staff" | "admin" | "cashier" | "driver";
+
+/** Panel roles (v6 SQL). Customers never get into the panel. */
+export const ROLE_LABEL: Record<Exclude<Role, "customer">, string> = { admin: "Admin", staff: "Staff", cashier: "Cashier", driver: "Driver" };
 
 export type OrderStatus = "pending" | "confirmed" | "preparing" | "ready" | "out_for_delivery" | "completed" | "cancelled";
 
@@ -33,6 +36,8 @@ export type Order = {
   total: number;
   note: string | null;
   cancel_reason: string | null;
+  /** v6: delivery driver who took the order */
+  driver_id?: string | null;
   locale: string;
   created_at: string;
   updated_at: string;

@@ -22,6 +22,10 @@ NEXT_PUBLIC_WEBSITE_URL=http://localhost:3000
 Never put the service-role key in this app. Everything goes through the staff's own login, Row Level Security and the staff/admin RPCs, so the database decides what each role may do.
 
 ## Giving someone access
+**Easiest (needs the website repo's `database/panzutti_supabase_v6.sql` run and its `admin-users` Edge Function deployed):** an admin opens **Users & roles** (`/users`), creates the login (name, email, password, role, branch) and hands over the email + password. Roles: **admin** (everything), **staff** (orders, InstaPay, menu, points, reports), **cashier** (same without reports/dashboard), **driver** (only `/deliveries`: take ready delivery orders, mark them delivered). The same page changes roles/branches, switches people off and resets passwords.
+
+The very first admin still has to be made by hand:
+
 
 1. **Supabase → Authentication → Users → Add user → Create new user.** Enter the email and a password, and tick **Auto Confirm User**.
 2. **Supabase → SQL Editor**, then set the role:

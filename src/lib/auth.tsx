@@ -12,8 +12,13 @@ type AuthValue = {
   session: Session | null | undefined;
   /** undefined while loading; null when signed out or no profile row */
   profile: Profile | null | undefined;
+  /** admin, staff or cashier: the order desk */
   isStaff: boolean;
   isAdmin: boolean;
+  /** delivery driver: only the Deliveries page */
+  isDriver: boolean;
+  /** staff and admin (reports are refused to cashiers and drivers by the database) */
+  canReports: boolean;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 };
@@ -53,12 +58,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo<AuthValue>(() => {
-    const active = !!profile?.is_active;
+    const role = profile?.is_active ? profile.role : undefined;
     return {
       session,
       profile,
-      isStaff: active && (profile?.role === "staff" || profile?.role === "admin"),
-      isAdmin: active && profile?.role === "admin",
+      isStaff: role === "staff" || role === "admin" || role === "cashier",
+      isAdmin: role === "admin",
+      isDriver: role === "driver",
+      canReports: role === "staff" || role === "admin",
       signIn,
       signOut,
     };
