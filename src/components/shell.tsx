@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BarChart3, Camera, ClipboardList, CreditCard, ExternalLink, LayoutDashboard, LogOut, Menu as MenuIcon, ShieldAlert, Users, UtensilsCrossed, X } from "lucide-react";
+import { BarChart3, Camera, ClipboardList, CreditCard, ExternalLink, LayoutDashboard, LogOut, Menu as MenuIcon, ShieldAlert, Star, Users, UtensilsCrossed, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Button, Spinner } from "./ui";
@@ -13,6 +13,7 @@ const NAV = [
   { href: "/orders", label: "Orders", Icon: ClipboardList, admin: false },
   { href: "/payments", label: "InstaPay", Icon: CreditCard, admin: false },
   { href: "/menu", label: "Menu", Icon: UtensilsCrossed, admin: false },
+  { href: "/loyalty", label: "Loyalty points", Icon: Star, admin: false },
   { href: "/family", label: "Family photos", Icon: Camera, admin: true },
   { href: "/applications", label: "Applications", Icon: Users, admin: true },
   { href: "/reports", label: "Reports", Icon: BarChart3, admin: false },
