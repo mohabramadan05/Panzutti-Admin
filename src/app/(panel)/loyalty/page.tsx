@@ -8,16 +8,17 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import { dateTime, egp, localPhone } from "@/lib/utils";
 
-type Settings = { loyalty_enabled: boolean; loyalty_points_per_order: number; loyalty_redeem_points: number; loyalty_redeem_value: number };
+type Settings = { loyalty_enabled: boolean; loyalty_earn_amount: number; loyalty_redeem_points: number; loyalty_redeem_value: number };
 type Account = { phone: string; customer_name: string | null; points: number; lifetime_points: number; updated_at: string };
 type Tx = { id: string; delta: number; reason: string; note: string | null; created_at: string; orders: { order_number: number } | null };
 
 const REASON: Record<string, string> = { earn: "Earned", redeem: "Spent", refund: "Refunded", reverse: "Taken back", adjust: "Manual" };
 
-/** Admin-only rules: points per completed order and how many points = how much money off. */
+/** Admin-only rules: 1 point per X EGP spent (food after discounts) and how many points = how much money off. */
 function LoyaltySettings() {
   const [s, setS] = useState<Settings | null>(null);
   const [egpValue, setEgpValue] = useState("");
+  const [earnEgp, setEarnEgp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
@@ -25,13 +26,14 @@ function LoyaltySettings() {
   useEffect(() => {
     supabase
       .from("app_settings")
-      .select("loyalty_enabled, loyalty_points_per_order, loyalty_redeem_points, loyalty_redeem_value")
+      .select("loyalty_enabled, loyalty_earn_amount, loyalty_redeem_points, loyalty_redeem_value")
       .eq("id", true)
       .single()
       .then(({ data, error: err }) => {
-        if (err || !data) return setError(err?.message ?? "Couldn't load the settings (has the v5 SQL been run?)");
+        if (err || !data) return setError(err?.message ?? "Couldn't load the settings (has the v7 SQL been run?)");
         setS(data as Settings);
         setEgpValue(String((data as Settings).loyalty_redeem_value / 100));
+        setEarnEgp(String((data as Settings).loyalty_earn_amount / 100));
       });
   }, []);
 
@@ -40,12 +42,13 @@ function LoyaltySettings() {
     const value = Math.round(Number(egpValue) * 100);
     if (!Number.isFinite(value) || value < 0) return setError("Enter how many EGP the points are worth");
     if (s.loyalty_redeem_points < 1) return setError("Points to exchange must be at least 1");
-    if (s.loyalty_points_per_order < 0) return setError("Points per order can't be negative");
+    const earn = Math.round(Number(earnEgp) * 100);
+    if (!Number.isFinite(earn) || earn < 1) return setError("Enter how many EGP earn 1 point");
     setBusy(true);
     setError("");
     const { error: err } = await supabase
       .from("app_settings")
-      .update({ ...s, loyalty_redeem_value: value })
+      .update({ ...s, loyalty_redeem_value: value, loyalty_earn_amount: earn })
       .eq("id", true);
     setBusy(false);
     if (err) return setError(err.message);
@@ -64,8 +67,8 @@ function LoyaltySettings() {
       </label>
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="block text-sm font-bold">
-          Points per completed order
-          <Input type="number" min={0} value={s.loyalty_points_per_order} onChange={num("loyalty_points_per_order")} className="mt-1" />
+          1 point for every (EGP)
+          <Input type="number" min={0.01} step="0.5" value={earnEgp} onChange={(e) => setEarnEgp(e.target.value)} className="mt-1" />
         </label>
         <label className="block text-sm font-bold">
           Points to exchange
@@ -77,7 +80,8 @@ function LoyaltySettings() {
         </label>
       </div>
       <p className="text-sm text-muted-foreground">
-        A customer earns <b>{s.loyalty_points_per_order}</b> points for every completed order. Every <b>{s.loyalty_redeem_points}</b> points take{" "}
+        A customer earns <b>1</b> point for every <b>{egp(Math.round((Number(earnEgp) || 0) * 100))}</b> of food in a completed order (after
+        discounts, without VAT, service or delivery). Every <b>{s.loyalty_redeem_points}</b> points take{" "}
         <b>{egp(Math.round((Number(egpValue) || 0) * 100))}</b> off their next order.
       </p>
       <ErrorNote message={error} />

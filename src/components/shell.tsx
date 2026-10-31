@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Bike, Camera, ClipboardList, Contact, CreditCard, ExternalLink, LayoutDashboard, LogOut, Menu as MenuIcon, ShieldAlert, Star, UserCog, Users, UtensilsCrossed, X } from "lucide-react";
+import { BarChart3, Bike, Camera, ClipboardList, Contact, CreditCard, ExternalLink, LayoutDashboard, LogOut, Menu as MenuIcon, ShieldAlert, Star, UserCog, UserRound, Users, UtensilsCrossed, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ const NAV: { href: string; label: string; Icon: typeof LayoutDashboard; roles: P
   { href: "/customers", label: "Customers", Icon: Contact, roles: ["admin", "staff", "cashier"] },
   { href: "/loyalty", label: "Loyalty points", Icon: Star, roles: ["admin", "staff", "cashier"] },
   { href: "/family", label: "Family photos", Icon: Camera, roles: ["admin"] },
+  { href: "/team", label: "Team gallery", Icon: UserRound, roles: ["admin"] },
   { href: "/applications", label: "Applications", Icon: Users, roles: ["admin"] },
   { href: "/reports", label: "Reports", Icon: BarChart3, roles: ["admin", "staff"] },
   { href: "/users", label: "Users & roles", Icon: UserCog, roles: ["admin"] },
