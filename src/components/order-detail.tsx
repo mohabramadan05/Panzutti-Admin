@@ -5,6 +5,7 @@ import { Ban, Bike, CalendarClock, CalendarDays, CheckCircle2, MapPin, MessageSq
 import { supabase } from "@/lib/supabase";
 import { NEXT_LABEL, STATUS_LABEL, kindOf, nextStatus, type Order, type OrderItem, type PaymentProof } from "@/lib/types";
 import { dateTime, egp, localPhone, time } from "@/lib/utils";
+import { useOrderAlarm } from "./order-alarm";
 import { ProofReview } from "./proof-review";
 import { Badge, Button, ErrorNote, Input, Spinner, StatusBadge } from "./ui";
 
@@ -20,6 +21,13 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
   const [cancelling, setCancelling] = useState(false);
   const [reason, setReason] = useState("");
   const [drivers, setDrivers] = useState<{ id: string; full_name: string }[]>([]);
+  const alarm = useOrderAlarm();
+  const acknowledge = alarm?.acknowledge;
+
+  // Someone is looking at this order, so the alarm has done its job
+  useEffect(() => {
+    acknowledge?.([order.id]);
+  }, [acknowledge, order.id]);
 
   // Active drivers of this order's branch (or of every branch), for the driver picker
   useEffect(() => {
@@ -67,6 +75,7 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
     if (err) return setError(err.message);
     setCancelling(false);
     onChanged();
+    alarm?.refresh();
     load();
   };
 
@@ -236,7 +245,7 @@ export function OrderDetail({ order, onClose, onChanged }: { order: Order; onClo
               {order.discount_total > 0 && (
                 <div className="flex justify-between text-primary"><dt>Discount {order.promo_code && `(${order.promo_code})`}</dt><dd>−{egp(order.discount_total)}</dd></div>
               )}
-              {order.delivery_fee > 0 && <div className="flex justify-between"><dt className="text-muted-foreground">Delivery</dt><dd>{egp(order.delivery_fee)}</dd></div>}
+              {order.delivery_fee > 0 && <div className="flex justify-between"><dt className="text-muted-foreground">Delivery{order.delivery_distance_km != null && ` (${Number(order.delivery_distance_km).toFixed(1)} km)`}</dt><dd>{egp(order.delivery_fee)}</dd></div>}
               {(order.service_total ?? 0) > 0 && (
                 <div className="flex justify-between"><dt className="text-muted-foreground">Service ({pct(order.service_rate)})</dt><dd>{egp(order.service_total)}</dd></div>
               )}

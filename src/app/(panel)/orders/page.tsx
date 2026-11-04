@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bell, BellOff, Bike, CalendarClock, CalendarDays, ClipboardList, ShoppingBag, Users } from "lucide-react";
+import { useOrderAlarm } from "@/components/order-alarm";
 import { OrderDetail } from "@/components/order-detail";
 import { Badge, Button, Empty, ErrorNote, PageHeader, Spinner, StatusBadge } from "@/components/ui";
 import { useOrders } from "@/lib/use-orders";
@@ -9,22 +10,6 @@ import { STATUS_LABEL, kindOf, type Order, type OrderStatus } from "@/lib/types"
 import { ago, cairoDate, cn, dateTime, egp, time } from "@/lib/utils";
 
 const COLUMNS: OrderStatus[] = ["pending", "confirmed", "preparing", "ready", "out_for_delivery"];
-
-/** Short "ding-dong" made with WebAudio, so no sound file is needed. */
-function chime(ctx: AudioContext) {
-  [880, 660].forEach((f, i) => {
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.frequency.value = f;
-    o.connect(g).connect(ctx.destination);
-    const t = ctx.currentTime + i * 0.25;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-    o.start(t);
-    o.stop(t + 0.45);
-  });
-}
 
 function OrderCard({ o, flash, onOpen, now }: { o: Order; flash: boolean; onOpen: () => void; now: number }) {
   const waitingPayment = o.payment_method === "instapay" && o.payment_status !== "paid";
@@ -69,11 +54,8 @@ function OrderCard({ o, flash, onOpen, now }: { o: Order; flash: boolean; onOpen
 }
 
 export default function OrdersPage() {
-  const audio = useRef<AudioContext | null>(null);
-  const [sound, setSound] = useState(false);
-  const { orders, fresh, error, reload } = useOrders(() => {
-    if (sound && audio.current) chime(audio.current);
-  });
+  const alarm = useOrderAlarm();
+  const { orders, fresh, error, reload } = useOrders();
   const [openId, setOpenId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"all" | "delivery" | "pickup" | "reservation">("all");
   const [now, setNow] = useState(() => Date.now());
@@ -91,14 +73,6 @@ export default function OrdersPage() {
   useEffect(() => {
     document.title = pendingCount ? `(${pendingCount}) New orders · Panzutti Admin` : "Orders · Panzutti Admin";
   }, [pendingCount]);
-
-  const toggleSound = () => {
-    // Browsers only allow audio after a click, so the AudioContext is created here
-    if (!audio.current) audio.current = new AudioContext();
-    const on = !sound;
-    setSound(on);
-    if (on) chime(audio.current);
-  };
 
   const open = orders?.find((o) => o.id === openId) ?? null;
   const finished = shown.filter((o) => o.status === "completed" || o.status === "cancelled");
@@ -124,10 +98,12 @@ export default function OrdersPage() {
                 </button>
               ))}
             </div>
-            <Button variant={sound ? "yellow" : "outline"} onClick={toggleSound} aria-pressed={sound}>
-              {sound ? <Bell className="h-4 w-4" aria-hidden /> : <BellOff className="h-4 w-4" aria-hidden />}
-              {sound ? "Sound on" : "Sound off"}
-            </Button>
+            {alarm && (
+              <Button variant={alarm.enabled ? "yellow" : "outline"} onClick={alarm.toggle} aria-pressed={alarm.enabled}>
+                {alarm.enabled ? <Bell className="h-4 w-4" aria-hidden /> : <BellOff className="h-4 w-4" aria-hidden />}
+                {alarm.enabled ? "Alarm on" : "Alarm off"}
+              </Button>
+            )}
           </>
         }
       />

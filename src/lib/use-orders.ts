@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import type { Order } from "./types";
 
@@ -9,14 +9,12 @@ const ACTIVE = ["pending", "confirmed", "preparing", "ready", "out_for_delivery"
 /**
  * Active orders + the last 24 h of finished ones, kept live with Supabase Realtime
  * (RLS limits staff to their branch). `fresh` holds ids of orders that just arrived,
- * so the board can flash them; `onNew` fires for each brand-new order (e.g. to beep).
+ * so the board can flash them. The sound lives in components/order-alarm.tsx.
  */
-export function useOrders(onNew?: (o: Order) => void) {
+export function useOrders() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [fresh, setFresh] = useState<string[]>([]);
   const [error, setError] = useState("");
-  const onNewRef = useRef(onNew);
-  onNewRef.current = onNew;
 
   const load = useCallback(async () => {
     const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -35,13 +33,13 @@ export function useOrders(onNew?: (o: Order) => void) {
   useEffect(() => {
     load();
     const channel = supabase
-      .channel("admin-orders")
+      // New topic per mount: channel() would hand back the previous one while it is still closing
+      .channel(`admin-orders-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
         if (payload.eventType === "INSERT") {
           const o = payload.new as Order;
           setFresh((f) => [...f, o.id]);
           window.setTimeout(() => setFresh((f) => f.filter((id) => id !== o.id)), 8000);
-          onNewRef.current?.(o);
         }
         load();
       })

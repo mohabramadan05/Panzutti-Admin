@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Bike, Camera, ClipboardList, Contact, CreditCard, ExternalLink, LayoutDashboard, LogOut, Menu as MenuIcon, ShieldAlert, Star, UserCog, UserRound, Users, UtensilsCrossed, X } from "lucide-react";
+import { BarChart3, Bike, Camera, ClipboardList, Contact, CreditCard, ExternalLink, LayoutDashboard, LogOut, Menu as MenuIcon, ShieldAlert, Star, Tag, Truck, UserCog, UserRound, Users, UtensilsCrossed, X } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { WEBSITE_URL } from "@/lib/website";
+import { OrderAlarmProvider } from "./order-alarm";
 import { Button, Spinner } from "./ui";
 
 type PanelRole = Exclude<Role, "customer">;
@@ -20,6 +22,8 @@ const NAV: { href: string; label: string; Icon: typeof LayoutDashboard; roles: P
   { href: "/menu", label: "Menu", Icon: UtensilsCrossed, roles: ["admin", "staff", "cashier"] },
   { href: "/customers", label: "Customers", Icon: Contact, roles: ["admin", "staff", "cashier"] },
   { href: "/loyalty", label: "Loyalty points", Icon: Star, roles: ["admin", "staff", "cashier"] },
+  { href: "/delivery", label: "Delivery prices", Icon: Truck, roles: ["admin"] },
+  { href: "/promo-codes", label: "Promo codes", Icon: Tag, roles: ["admin"] },
   { href: "/family", label: "Family photos", Icon: Camera, roles: ["admin"] },
   { href: "/team", label: "Team gallery", Icon: UserRound, roles: ["admin"] },
   { href: "/applications", label: "Applications", Icon: Users, roles: ["admin"] },
@@ -29,7 +33,7 @@ const NAV: { href: string; label: string; Icon: typeof LayoutDashboard; roles: P
 
 const isUnder = (pathname: string, href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
-const WEBSITE = process.env.NEXT_PUBLIC_WEBSITE_URL ?? "https://panzutti.com";
+const WEBSITE = WEBSITE_URL;
 
 /** Signed-in staff/admin only. Everything else gets the login page or a "no access" screen. */
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -52,6 +56,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
   }, [allowed, home, router]);
 
   useEffect(() => setOpen(false), [pathname]);
+
+  // The open mobile menu scrolls on its own, not the page behind it. On <html>: its overflow-x rule stops <body> from controlling page scroll.
+  useEffect(() => {
+    document.documentElement.classList.toggle("max-lg:overflow-hidden", open);
+    return () => document.documentElement.classList.remove("max-lg:overflow-hidden");
+  }, [open]);
 
   if (session === undefined || (session && profile === undefined) || session === null)
     return (
@@ -105,7 +115,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
   );
 
   const footer = (
-    <div className="mt-auto space-y-3 border-t border-brand-cream/15 pt-4 text-sm text-brand-cream/80">
+    <div className="mt-auto shrink-0 space-y-3 border-t border-brand-cream/15 pt-4 text-sm text-brand-cream/80">
       <a href={WEBSITE} target="_blank" rel="noreferrer" className="flex items-center gap-2 hover:text-brand-cream">
         <ExternalLink className="h-4 w-4" aria-hidden /> Open website
       </a>
@@ -123,11 +133,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
       {/* desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen flex-col bg-brand-green-dark p-4 lg:flex">
-        <Link href="/" className="mb-6 flex items-center gap-2 px-2 pt-2">
+        <Link href="/" className="mb-6 flex shrink-0 items-center gap-2 px-2 pt-2">
           <span aria-label="Panzutti" className="font-display text-2xl font-extrabold italic leading-none text-brand-cream">Panzutti</span>
           <span className="rounded-full bg-brand-yellow px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-foreground">Admin</span>
         </Link>
-        {nav}
+        {/* links scroll on short screens; logo and sign out stay in place */}
+        <div className="mb-3 min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-color:rgb(255_242_208/0.35)_transparent] [scrollbar-width:thin]">{nav}</div>
         {footer}
       </aside>
 
@@ -142,13 +153,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
         </button>
       </header>
       {open && (
-        <div className="fixed inset-x-0 bottom-0 top-14 z-30 flex flex-col overflow-y-auto bg-brand-green-dark p-4 lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 top-14 z-30 flex flex-col overflow-y-auto overscroll-contain bg-brand-green-dark p-4 lg:hidden">
           {nav}
           {footer}
         </div>
       )}
 
-      <main className="min-w-0 p-4 md:p-8">{children}</main>
+      <main className="min-w-0 p-4 md:p-8">{isStaff ? <OrderAlarmProvider>{children}</OrderAlarmProvider> : children}</main>
     </div>
   );
 }

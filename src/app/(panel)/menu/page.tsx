@@ -9,6 +9,7 @@ import { Badge, Button, Card, ErrorNote, Input, PageHeader, Spinner } from "@/co
 import { useAuth } from "@/lib/auth";
 import { friendlyDbError, type AddonRow, type CategoryRow, type GroupRow, type MenuItemRow } from "@/lib/menu-types";
 import { supabase } from "@/lib/supabase";
+import { refreshWebsite } from "@/lib/website";
 import { cn, egp } from "@/lib/utils";
 
 type Editing =
@@ -84,6 +85,7 @@ export default function MenuPage() {
     const { error: err } = await fn();
     setBusyId(null);
     if (err) setError(friendlyDbError(err.message));
+    else refreshWebsite();
     load();
   };
 
@@ -118,11 +120,13 @@ export default function MenuPage() {
     setDeleteBusy(false);
     if (err) return setDeleteError(friendlyDbError(err.message));
     setDeleting(null);
+    refreshWebsite();
     load();
   };
 
   const saved = () => {
     setEditing(null);
+    refreshWebsite();
     load();
   };
 
@@ -221,7 +225,7 @@ export default function MenuPage() {
           </div>
 
           {/* ---------------------------------------------------------- add-on groups */}
-          <Card className="p-0 xl:sticky xl:top-8">
+          <Card className="p-0 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto xl:overscroll-contain">
             <div className="flex items-center justify-between border-b border-border px-5 py-3">
               <h2 className="text-lg text-primary">Add-ons</h2>
               {isAdmin && (

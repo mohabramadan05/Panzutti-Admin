@@ -25,6 +25,8 @@ export type Order = {
   subtotal: number;
   discount_total: number;
   delivery_fee: number;
+  /** v8: straight-line km from the branch to the customer's pin, when the fee is by distance */
+  delivery_distance_km?: number | null;
   /** v4 (panzutti_supabase_v4.sql): 14% VAT on every order, 12% service on reservations. Absent before v4 runs. */
   tax_total?: number;
   service_total?: number;
