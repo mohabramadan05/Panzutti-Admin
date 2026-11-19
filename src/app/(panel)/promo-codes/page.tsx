@@ -12,8 +12,10 @@ type Promo = {
   id: string;
   code: string;
   description: string | null;
-  discount_type: "percent" | "fixed" | "free_delivery"; // free_delivery needs database/panzutti_supabase_v9.sql (website repo)
-  discount_value: number; // percent (20) or piasters (5000); 0 for free_delivery
+  discount_type: "percent" | "fixed";
+  discount_value: number; // percent (20) or piasters (5000); 0 = free delivery only
+  /** v9 (database/panzutti_supabase_v9.sql in the website repo): delivery fee becomes 0. Missing before v9 is run. */
+  free_delivery?: boolean;
   max_discount: number | null;
   min_order_total: number;
   order_type: "pickup" | "delivery" | null;
@@ -54,12 +56,11 @@ const toPiasters = (value: string) => {
   return Number.isFinite(n) ? Math.round(n * 100) : NaN;
 };
 
-const discountLabel = (p: Promo) =>
-  p.discount_type === "free_delivery"
-    ? "Free delivery"
-    : p.discount_type === "percent"
-      ? `${p.discount_value}% off${p.max_discount ? `, up to ${egp(p.max_discount)}` : ""}`
-      : `${egp(p.discount_value)} off`;
+const discountLabel = (p: Promo) => {
+  const off = !p.discount_value ? "" : p.discount_type === "percent" ? `${p.discount_value}% off${p.max_discount ? `, up to ${egp(p.max_discount)}` : ""}` : `${egp(p.discount_value)} off`;
+  const text = [off, p.free_delivery && "free delivery"].filter(Boolean).join(" + ");
+  return text ? text[0].toUpperCase() + text.slice(1) : "No discount";
+};
 
 function statusOf(p: Promo, used: number, now: number) {
   if (!p.is_active) return { label: "Off", tone: "muted" as const };
@@ -74,7 +75,8 @@ function PromoForm({ promo, branches, onClose, onSaved }: { promo: Promo | null;
     code: promo?.code ?? "",
     description: promo?.description ?? "",
     discount_type: promo?.discount_type ?? ("percent" as Promo["discount_type"]),
-    value: promo ? String(promo.discount_type === "percent" ? promo.discount_value : promo.discount_value / 100) : "",
+    free_delivery: !!promo?.free_delivery,
+    value: promo?.discount_value === 0 ? "" : promo ? String(promo.discount_type === "percent" ? promo.discount_value : promo.discount_value / 100) : "",
     max_discount: promo?.max_discount ? String(promo.max_discount / 100) : "",
     min_order: promo ? String(promo.min_order_total / 100) : "0",
     order_type: promo?.order_type ?? "",
@@ -89,19 +91,21 @@ function PromoForm({ promo, branches, onClose, onSaved }: { promo: Promo | null;
   const [error, setError] = useState("");
   const set = <K extends keyof typeof f>(key: K, value: (typeof f)[K]) => setF((cur) => ({ ...cur, [key]: value }));
   const isPercent = f.discount_type === "percent";
-  const isFree = f.discount_type === "free_delivery";
+  const isFree = f.free_delivery;
 
   const save = async () => {
     const code = f.code.trim().toUpperCase();
-    const value = isFree ? 0 : isPercent ? toInt(f.value) : toPiasters(f.value);
-    const max_discount = isPercent ? toPiasters(f.max_discount) : null;
+    // free delivery may come without money off: empty value = 0
+    const value = isFree && f.value.trim() === "" ? 0 : isPercent ? toInt(f.value) : toPiasters(f.value);
+    const freeOnly = isFree && value === 0;
+    const max_discount = isPercent && f.value.trim() !== "" ? toPiasters(f.max_discount) : null;
     const min_order_total = toPiasters(f.min_order);
     const usage_limit = toInt(f.usage_limit);
     const per_user_limit = toInt(f.per_user_limit);
 
     if (!CODE_RE.test(code)) return setError("The code must be 3 to 30 letters or numbers, with no spaces (- and _ are fine)");
-    if (isPercent && (!value || value < 1 || value > 100)) return setError("Enter a whole percent from 1 to 100");
-    if (!isPercent && !isFree && (!value || value < 1)) return setError("Enter the discount in EGP");
+    if (!freeOnly && isPercent && (!value || value < 1 || value > 100)) return setError("Enter a whole percent from 1 to 100");
+    if (!freeOnly && !isPercent && (!value || value < 1)) return setError("Enter the discount in EGP");
     if (max_discount !== null && !(max_discount > 0)) return setError("Enter the biggest discount in EGP, or leave it empty for no cap");
     if (min_order_total === null || !(min_order_total >= 0)) return setError("Enter the minimum order in EGP (0 = no minimum)");
     if (usage_limit !== null && !(usage_limit > 0)) return setError("Total uses must be a whole number above 0, or empty for unlimited");
@@ -117,22 +121,23 @@ function PromoForm({ promo, branches, onClose, onSaved }: { promo: Promo | null;
       discount_value: value,
       max_discount,
       min_order_total,
-      // free delivery only makes sense on delivery orders (validate_promo_code refuses the rest too)
-      order_type: isFree ? "delivery" : f.order_type || null,
+      order_type: f.order_type || null,
       branch_id: f.branch_id || null,
       starts_at: f.starts_at ? fromCairoInput(f.starts_at) : null,
       ends_at: f.ends_at ? fromCairoInput(f.ends_at) : null,
       usage_limit,
       per_user_limit,
       is_active: f.is_active,
+      // only sent when used, so other codes still save before v9 adds the column
+      ...(isFree || promo?.free_delivery ? { free_delivery: isFree } : {}),
     };
     const query = promo ? supabase.from("promo_codes").update(row).eq("id", promo.id) : supabase.from("promo_codes").insert(row);
     const { data, error: err } = await query.select("id");
     setBusy(false);
     if (err) {
       if (err.code === "23505") return setError(`The code ${code} already exists`);
-      // 22P02 = unknown enum value: the free_delivery type is added by panzutti_supabase_v9.sql
-      if (isFree && err.code === "22P02") return setError("Free delivery codes need the v9 database update (panzutti_supabase_v9.sql) to be run first");
+      // PGRST204 = unknown column: free_delivery is added by panzutti_supabase_v9.sql
+      if (isFree && (err.code === "PGRST204" || err.code === "42703")) return setError("Free delivery codes need the v9 database update (panzutti_supabase_v9.sql) to be run first");
       return setError(err.message);
     }
     if (!data?.length) return setError("Not saved: only admins can change promo codes");
@@ -158,16 +163,11 @@ function PromoForm({ promo, branches, onClose, onSaved }: { promo: Promo | null;
             <select value={f.discount_type} onChange={(e) => set("discount_type", e.target.value as Promo["discount_type"])} className={selectClass}>
               <option value="percent">Percent (%)</option>
               <option value="fixed">Fixed amount (EGP)</option>
-              <option value="free_delivery">Free delivery</option>
             </select>
           </Field>
-          {isFree ? (
-            <p className="self-end pb-2 text-sm text-muted-foreground sm:col-span-2">The delivery fee becomes 0. Works on delivery orders only; nothing comes off the food.</p>
-          ) : (
-            <Field label={isPercent ? "Percent off" : "EGP off"}>
-              <Input type="number" min={1} max={isPercent ? 100 : undefined} step={isPercent ? 1 : 0.5} value={f.value} onChange={(e) => set("value", e.target.value)} />
-            </Field>
-          )}
+          <Field label={isPercent ? "Percent off" : "EGP off"} hint={isFree ? "Empty = free delivery only" : undefined}>
+            <Input type="number" min={1} max={isPercent ? 100 : undefined} step={isPercent ? 1 : 0.5} value={f.value} onChange={(e) => set("value", e.target.value)} />
+          </Field>
           {isPercent && (
             <Field label="Biggest discount (EGP)" hint="Empty = no cap">
               <Input type="number" min={0} step="1" value={f.max_discount} onChange={(e) => set("max_discount", e.target.value)} />
@@ -175,12 +175,19 @@ function PromoForm({ promo, branches, onClose, onSaved }: { promo: Promo | null;
           )}
         </div>
 
+        <div>
+          <Check label="Free delivery" checked={f.free_delivery} onChange={(v) => set("free_delivery", v)} />
+          <p className="mt-1 text-xs text-muted-foreground">
+            The delivery fee becomes 0 on delivery orders. Leave the discount empty for a free-delivery-only code (it won&apos;t work on pickup).
+          </p>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Minimum order (EGP)" hint="Food total, before VAT and delivery">
             <Input type="number" min={0} step="1" value={f.min_order} onChange={(e) => set("min_order", e.target.value)} />
           </Field>
           <Field label="Valid for" hint="Table reservations count as pickup">
-            <select value={isFree ? "delivery" : f.order_type} disabled={isFree} onChange={(e) => set("order_type", e.target.value as typeof f.order_type)} className={selectClass}>
+            <select value={f.order_type} onChange={(e) => set("order_type", e.target.value as typeof f.order_type)} className={selectClass}>
               <option value="">All orders</option>
               <option value="delivery">Delivery only</option>
               <option value="pickup">Pickup only</option>
